@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script>
+
+
+function displayMetric(metric, deviceName) {
+    var html = "<h3>Metric</h3>"
+    html += "<div style=\"margin-left: 20px;\">"
+    html += `<b>Name: </b> ${metric.metricName} <br>`
+    html += `<b>Metrics: </b>`
+
+    html += "<ul>"
+    metric.aggregations.forEach(function(aggregationName) {
+        html += "<li>"
+        html += `${aggregationName}<br>`;
+        html += `<img id=\"${aggregationName}\" `
+        html += `src=\"http://localhost:5000/devices/${deviceName}/metrics/${metric.metricName}/aggregations/${aggregationName}/chart?rand=\">`
+        html += "</li>"
+    })
+    html += "</ul>"
+    html += "</div>"
+
+    var content = $('#content');
+    content.html(html)
+
+    setInterval(function() {
+        metric.aggregations.forEach(function(aggregationName) {
+            var image = $(`#${aggregationName}`)
+            var srcUrl = image.attr('src')
+            console.log(srcUrl)
+            var newUrl = srcUrl.split("?rand=")[0] + "?rand=" + Math.random()
+            image.attr('src', newUrl)
+        })
+    }, 5000)
+}
+
+function getMetric(metricName) {
+    var deviceName = $('#deviceName').val();
+
+    $.get(`http://localhost:5000/devices/${deviceName}/metrics/${metricName}`, function(data, statusCode){
+        displayMetric(data, deviceName)
+    })
+}
+
+function displayDevice(device) {
+    var html = "<h3>Device</h3>"
+    html += `<input type=\"hidden\" id=\"deviceName\" value=\"${device.deviceName}\">`
+    html += "<div style=\"margin-left: 20px;\">"
+    html += `<b>Name: </b> ${device.deviceName} <br>`
+    html += `<b>Metrics: </b>`
+
+    html += "<ul>"
+    device.metrics.forEach(function(metricName) {
+        html += "<li>"
+        html += `${metricName}  `;
+        html += `<button id=${metricName} onClick=\"getMetric(this.id)\">Display</button>`
+        html += "</li>"
+    })
+    html += "</ul>"
+    html += "</div>"
+
+    var content = $('#content');
+    content.html(html)
+}
+
+function getDevice(deviceName) {
+    $.get(`http://localhost:5000/devices/${deviceName}`, function(data, statusCode){
+        displayDevice(data)
+    })
+}
+
+function displayDevices(devices) {
+    var html = "<h3>All devices in network</h3>"
+    html += "<ul>"
+
+    devices.forEach(function(deviceName){
+        html += "<li>"
+        html += `${deviceName}  `;
+        html += `<button id=${deviceName} onClick=\"getDevice(this.id)\">Display</button>`
+        html += "</li>"
+    })
+    html += "</ul>"
+
+    var content = $('#content');
+    content.html(html)
+}
+
+function getDevices() {
+    $.get("http://localhost:5000/devices/", function(data, statusCode){
+        displayDevices(data.devices)
+    })
+}
+
+$(document).ready(function(){
+    getDevices()
+});
+
+</script>
+</head>
+<body>
+<p id="content">
+</p>
+</body>
+</html>
