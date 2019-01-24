@@ -1,6 +1,8 @@
 package hr.fer.rassus.dashboard
 
 
+import java.time.Instant
+
 import akka.actor.{Actor, Props}
 
 import scala.collection.mutable
@@ -21,6 +23,9 @@ object MetricActor {
   case class Aggregation(aggregationName: String, values: Vector[Double])
   case object NoSuchAggregation
   case class DrawAggregationResult(imageLocation: String)
+
+  // internal classes
+  case class AggregationValue(value: Double, timestamp: Instant)
 }
 
 class MetricActor extends Actor {
@@ -29,12 +34,13 @@ class MetricActor extends Actor {
 
   val maxQueueSize: Int = 50
   // map[aggregationName, queue[values]
-  val aggregationValuesMap: mutable.Map[String, mutable.Queue[Double]] = mutable.Map.empty[String, mutable.Queue[Double]]
+  val aggregationValuesMap: mutable.Map[String, mutable.Queue[AggregationValue]] =
+    mutable.Map.empty[String, mutable.Queue[AggregationValue]]
 
   override def receive: Receive = {
     case StoreAggregation(aggregationName, value) =>
       if (!aggregationValuesMap.contains(aggregationName)) {
-        aggregationValuesMap.put(aggregationName, mutable.Queue.empty[Double])
+        aggregationValuesMap.put(aggregationName, mutable.Queue.empty[AggregationValue])
       }
 
       val queue = aggregationValuesMap(aggregationName)
@@ -42,7 +48,7 @@ class MetricActor extends Actor {
         queue.dequeue()
       }
 
-      queue.enqueue(value)
+      queue.enqueue(AggregationValue(value, Instant.now()))
       sender() ! StoreAggregationSuccess
 
     case GetMetric =>
@@ -50,7 +56,7 @@ class MetricActor extends Actor {
 
     case GetAggregation(aggregationName) =>
       if(aggregationValuesMap.contains(aggregationName)) {
-        val aggregationValues = aggregationValuesMap(aggregationName).toVector
+        val aggregationValues = aggregationValuesMap(aggregationName).map(_.value).toVector
         sender() ! Aggregation(aggregationName, aggregationValues)
       } else {
         sender() ! NoSuchAggregation
@@ -72,9 +78,11 @@ class MetricActor extends Actor {
       val charFile = Paths.get(chartDir.toString, charFileName).toString
 
       if(aggregationValuesMap.contains(aggregationName)) {
-        val aggregationValues = aggregationValuesMap(aggregationName).toVector
+        val aggregationValues = aggregationValuesMap(aggregationName)
 
-        val data = for (i <- aggregationValues.indices) yield (i + 1, aggregationValues(i))
+        val data = aggregationValues.map(aggregationValue =>
+          (aggregationValue.timestamp.toEpochMilli, aggregationValue.value)
+        )
         val chart = XYLineChart(data)
         chart.saveAsPNG(charFile)
         sender() ! DrawAggregationResult(charFile)
